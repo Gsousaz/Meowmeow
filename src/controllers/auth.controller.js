@@ -2,7 +2,6 @@ import { v4 as uuid } from "uuid";
 import bcrypt from "bcrypt";
 import { db } from "../database/database.conection.js";
 
-
 export async function signup(req, res) {
   try {
     const { name, email, password, cpf, telefone } = req.body;
@@ -20,14 +19,23 @@ export async function signup(req, res) {
 
     res.status(201).send("Usuário criado com sucesso!");
   } catch (err) {
-    res.status(500).send("Ocorreu um erro no servidor");
+    if (err.code === "23505") {
+      if (err.detail.includes("email")) {
+        return res.status(400).send("E-mail já cadastrado");
+      }
+      if (err.detail.includes("cpf")) {
+        return res.status(400).send("CPF já cadastrado");
+      }
+    }
+
+    res.status(500).send("Erro ao criar usuário.");
   }
 }
 
 export async function signin(req, res) {
   const { email, password } = req.body;
   try {
-    const user = await db.query(`SELECT * FROM users WHERE email = $1`, [
+    const user = await db.query(`SELECT id, name, password FROM users WHERE email = $1`, [
       email,
     ]);
 
@@ -45,14 +53,13 @@ export async function signin(req, res) {
 
     const token = uuid();
 
-    await db.query('INSERT INTO sessions (userId, "token") VALUES ($1, $2)', [
+    await db.query('INSERT INTO sessions (user_id, "token") VALUES ($1, $2)', [
       user.rows[0].id,
       token,
     ]);
-
-    res.status(200).send(token);
+    res.status(200).send({user: user.rows[0].name, token: token});
   } catch (err) {
     res.status(500).send(err.message);
-    console.error(err);
+    console.error(err.message);
   }
 }
