@@ -3,7 +3,7 @@ import { db } from "../database/database.conection.js";
 export async function newModel(req, res) {
   try {
     const authorization = req.headers["authorization"];
-    const { nome, url, descricao, cor, brinquedo_favorito } = req.body;
+    const { nome, url, fotos } = req.body;
     const token = authorization?.replace("Bearer ", "");
 
     if (!token) {
@@ -20,17 +20,30 @@ export async function newModel(req, res) {
       return res.status(401).send("Token inválido ou usuário não encontrado");
     }
 
-    await db.query(
-      `INSERT INTO models (nome, imagem, dono, descricao, cor, brinquedo_favorito) VALUES ($1, $2, $3, $4, $5, $6)`,
-      [nome, url, user.rows[0].id, descricao, cor, brinquedo_favorito]
+    const userId = user.rows[0].user_id;
+
+    const result = await db.query(
+      `INSERT INTO models (name, user_id) VALUES ($1, $2) RETURNING id`,
+      [nome, userId]
     );
+
+    const modelId = result.rows[0].id;
+
+    await db.query(`INSERT INTO fotos (model_id, url, is_main) VALUES ($1, $2, TRUE)`, [modelId, url]);
+
+    for (let fotoUrl of fotos) {
+      await db.query(`INSERT INTO fotos (model_id, url) VALUES ($1, $2)`, [modelId, fotoUrl]);
+    }
 
     res.sendStatus(201);
   } catch (err) {
     console.error(err.message);
-    res.status(500).send({ error: "Falha ao adicionar o modelo." });
+    res.status(500).send(err.message);
   }
 }
+
+
+
 
 export async function showAllModels(req, res) {
   try {
